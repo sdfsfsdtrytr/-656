@@ -15,20 +15,8 @@
       </div>
     </section>
 
-    <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
     <script>
-      window.firebaseConfig = {
-        apiKey: "AIzaSyC0tV-taAj5XoCKyMgKmHTJvIoo7if9_I",
-        authDomain: "hhh3-635eb.firebaseapp.com",
-        databaseURL: "https://hhh3-635eb-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "hhh3-635eb",
-        storageBucket: "hhh3-635eb.firebasestorage.app",
-        messagingSenderId: "1050561843784",
-        appId: "1:1050561843784:web:5a81720a9cefe720cebe7d",
-        measurementId: "G-69KS1TY8EE",
-      };
-      window.databasePath = "statusScreen/current";
+      const stateUrl = "https://hhh3-635eb-default-rtdb.europe-west1.firebasedatabase.app/statusScreen/current.json";
 
       const rotator = document.querySelector("#rotator");
       const greeting = document.querySelector("#greeting");
@@ -59,24 +47,32 @@
         greeting.hidden = true;
       }, 2200);
 
-      try {
-        firebase.initializeApp(window.firebaseConfig);
-        const stateRef = firebase.database().ref(window.databasePath);
+      let lastUpdatedAt = null;
 
-        stateRef.on("value", (snapshot) => {
-          if (!snapshot.exists()) {
-            stateRef.set({ ...defaultState, updatedAt: Date.now() });
+      pollState();
+      setInterval(pollState, 600);
+
+      async function pollState() {
+        try {
+          const response = await fetch(`${stateUrl}?t=${Date.now()}`, { cache: "no-store" });
+          if (!response.ok) throw new Error("bad_response");
+          const data = await response.json();
+          if (!data) {
+            await fetch(stateUrl, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...defaultState, updatedAt: Date.now() }),
+            });
             render(defaultState);
             return;
           }
-          render({ ...defaultState, ...snapshot.val() });
-        }, () => {
+          if (data.updatedAt === lastUpdatedAt) return;
+          lastUpdatedAt = data.updatedAt;
+          render({ ...defaultState, ...data });
+        } catch {
           content.className = "screen-content disconnected";
           content.textContent = "нет связи";
-        });
-      } catch {
-        content.className = "screen-content disconnected";
-        content.textContent = "настрой Firebase";
+        }
       }
 
       function render(state) {
