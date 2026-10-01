@@ -106,6 +106,9 @@
           } else if (state.color === "red") {
             screen.style.background = "#ef3939";
             screen.style.color = "#ffffff";
+          } else if (state.color === "custom" && state.customColor) {
+            screen.style.background = state.customColor;
+            screen.style.color = readableTextColor(state.customColor);
           } else {
             screen.style.background = "#ffffff";
             screen.style.color = "#111111";
@@ -117,7 +120,7 @@
 
         if (type === "text") {
           ensureTextLayer();
-          screen.style.background = "#ffffff";
+          screen.style.background = state.textBackgroundEnabled ? state.textBackgroundColor || "#ffffff" : "#ffffff";
           screen.style.color = state.textColor || "#111111";
           mainText.textContent = state.customText || "";
           return;
@@ -146,6 +149,16 @@
         }
         screen.innerHTML = '<div id="mainText"></div>';
         mainText = document.querySelector("#mainText");
+      }
+
+      function readableTextColor(hex) {
+        const clean = String(hex || "").replace("#", "");
+        if (clean.length !== 6) return "#ffffff";
+        const r = parseInt(clean.slice(0, 2), 16);
+        const g = parseInt(clean.slice(2, 4), 16);
+        const b = parseInt(clean.slice(4, 6), 16);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        return brightness > 150 ? "#111111" : "#ffffff";
       }
     </script>
   </body>
