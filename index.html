@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Экран статуса</title>
+    <title>Экран</title>
     <style>
       * {
         box-sizing: border-box;
@@ -15,228 +15,157 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #ffffff;
         font-family: Arial, Helvetica, sans-serif;
+        background: #ffffff;
       }
 
-      .status-screen {
+      #screen {
         position: fixed;
         inset: 0;
-        background: #ffffff;
-        overflow: hidden;
-      }
-
-      .rotator {
-        position: absolute;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        transform-origin: center;
-      }
-
-      .rotator.portrait {
-        width: 100svh;
-        height: 100svw;
-        top: 50%;
-        left: 50%;
-        inset: auto;
-        transform: translate(-50%, -50%) rotate(90deg);
-      }
-
-      .rotator.upside {
-        transform: rotate(180deg);
-      }
-
-      .greeting {
-        position: absolute;
-        inset: 0;
-        z-index: 2;
         display: grid;
         place-items: center;
         background: #ffffff;
-        color: #111318;
-        font-size: clamp(3rem, 12vw, 9rem);
-        font-weight: 800;
-        text-align: center;
-        padding: 8vw;
-      }
-
-      .screen-content {
-        width: 100%;
-        height: 100%;
-        display: grid;
-        place-items: center;
+        color: #111111;
         text-align: center;
       }
 
-      .blank {
-        background: #ffffff;
-      }
-
-      .color {
-        color: #ffffff;
-        font-size: clamp(3rem, 11vw, 10rem);
+      #mainText {
+        padding: 6vw;
+        font-size: clamp(44px, 12vw, 150px);
         font-weight: 900;
         line-height: 1.05;
-        padding: 7vw;
-      }
-
-      .green {
-        background: #19c15f;
-      }
-
-      .yellow {
-        background: #ffd333;
-        color: #111318;
-      }
-
-      .red {
-        background: #ef3939;
-      }
-
-      .text-mode {
-        padding: 7vw;
-        background: #ffffff;
-        color: #111318;
-        font-size: clamp(2.6rem, 10vw, 9rem);
-        font-weight: 800;
-        line-height: 1.08;
         overflow-wrap: anywhere;
         white-space: pre-wrap;
       }
 
-      .media-mode {
-        background: #000000;
+      #debug {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        z-index: 10;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.72);
+        color: #ffffff;
+        font-size: 14px;
+        text-align: left;
+        word-break: break-word;
       }
 
-      .media-mode img,
-      .media-mode video {
+      img,
+      video {
         width: 100%;
         height: 100%;
         object-fit: contain;
-      }
-
-      .disconnected {
-        background: #ffffff;
-        color: #c52020;
-        font-size: clamp(2rem, 8vw, 5rem);
-        font-weight: 800;
+        background: #000000;
       }
     </style>
   </head>
   <body>
-    <section class="status-screen">
-      <div id="rotator" class="rotator landscape">
-        <div id="greeting" class="greeting">Приветствую</div>
-        <div id="content" class="screen-content blank"></div>
-      </div>
-    </section>
+    <main id="screen">
+      <div id="mainText">ЭКРАН РАБОТАЕТ</div>
+    </main>
+    <div id="debug">Запуск экрана...</div>
 
     <script>
-      const STATE_URL = "https://hhh3-635eb-default-rtdb.europe-west1.firebasedatabase.app/statusScreen/current.json";
-      const rotator = document.querySelector("#rotator");
-      const greeting = document.querySelector("#greeting");
-      const content = document.querySelector("#content");
+      const URL = "https://hhh3-635eb-default-rtdb.europe-west1.firebasedatabase.app/statusScreen/current.json";
+      const screen = document.querySelector("#screen");
+      let mainText = document.querySelector("#mainText");
+      const debug = document.querySelector("#debug");
 
-      const defaultState = {
-        type: "blank",
-        color: null,
-        showWords: false,
-        customText: "",
-        media: null,
-        orientation: "landscape",
-        updatedAt: 0,
-      };
-
-      const labels = {
+      const words = {
         green: "не занят",
         red: "занят",
         yellow: "занят, но не сильно",
       };
 
-      let lastStateText = "";
-      let liveEvents = null;
+      let last = "";
 
-      setTimeout(() => {
-        greeting.hidden = true;
-      }, 1800);
+      showStartup();
+      readNow();
+      setInterval(readNow, 700);
 
-      startLiveUpdates();
-      readState();
-      setInterval(readState, 1000);
-
-      function startLiveUpdates() {
-        try {
-          liveEvents = new EventSource(STATE_URL);
-          liveEvents.addEventListener("put", handleFirebaseEvent);
-          liveEvents.addEventListener("patch", handleFirebaseEvent);
-          liveEvents.onerror = () => {
-            readState();
-          };
-        } catch {
-          readState();
-        }
+      function showStartup() {
+        ensureTextLayer();
+        screen.style.background = "#ffffff";
+        screen.style.color = "#111111";
+        mainText.textContent = "ЭКРАН РАБОТАЕТ";
+        debug.textContent = "Файл экрана загрузился. Жду данные Firebase...";
       }
 
-      function handleFirebaseEvent(event) {
+      async function readNow() {
         try {
-          const payload = JSON.parse(event.data);
-          if (payload && payload.data) {
-            renderOnce(payload.data);
-          }
-        } catch {
-          readState();
-        }
-      }
-
-      async function readState() {
-        try {
-          const response = await fetch(`${STATE_URL}?t=${Date.now()}`, { cache: "no-store" });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const response = await fetch(URL + "?t=" + Date.now(), { cache: "no-store" });
+          if (!response.ok) throw new Error("HTTP " + response.status);
           const data = await response.json();
-          renderOnce(data || defaultState);
-        } catch {
-          content.className = "screen-content disconnected";
-          content.textContent = "нет связи";
+          const text = JSON.stringify(data || {});
+          debug.textContent = "Firebase OK: " + text;
+          if (text === last) return;
+          last = text;
+          render(data || {});
+        } catch (error) {
+          screen.style.background = "#ffffff";
+          screen.style.color = "#c52020";
+          mainText.textContent = "НЕТ СВЯЗИ";
+          debug.textContent = "Ошибка чтения Firebase: " + error.message;
         }
-      }
-
-      function renderOnce(rawState) {
-        const stateText = JSON.stringify(rawState);
-        if (stateText === lastStateText) return;
-        lastStateText = stateText;
-        render({ ...defaultState, ...rawState });
       }
 
       function render(state) {
-        rotator.className = `rotator ${state.orientation || "landscape"}`;
+        const type = state.type || "blank";
 
-        if (state.type === "color") {
-          content.className = `screen-content color ${state.color || "green"}`;
-          content.innerHTML = state.showWords ? `<span>${labels[state.color] || ""}</span>` : "";
+        if (type === "color") {
+          ensureTextLayer();
+          if (state.color === "green") {
+            screen.style.background = "#19c15f";
+            screen.style.color = "#ffffff";
+          } else if (state.color === "yellow") {
+            screen.style.background = "#ffd333";
+            screen.style.color = "#111111";
+          } else if (state.color === "red") {
+            screen.style.background = "#ef3939";
+            screen.style.color = "#ffffff";
+          } else {
+            screen.style.background = "#ffffff";
+            screen.style.color = "#111111";
+          }
+
+          mainText.textContent = state.showWords ? words[state.color] || "" : "";
           return;
         }
 
-        if (state.type === "text") {
-          content.className = "screen-content text-mode";
-          content.textContent = state.customText || "";
+        if (type === "text") {
+          ensureTextLayer();
+          screen.style.background = "#ffffff";
+          screen.style.color = "#111111";
+          mainText.textContent = state.customText || "";
           return;
         }
 
-        if (state.type === "image" && state.media && state.media.dataUrl) {
-          content.className = "screen-content media-mode";
-          content.innerHTML = `<img src="${state.media.dataUrl}" alt="">`;
+        if (type === "image" && state.media && state.media.dataUrl) {
+          screen.innerHTML = '<img src="' + state.media.dataUrl + '" alt="">';
           return;
         }
 
-        if (state.type === "video" && state.media && state.media.dataUrl) {
-          content.className = "screen-content media-mode";
-          content.innerHTML = `<video src="${state.media.dataUrl}" autoplay loop muted playsinline controls></video>`;
+        if (type === "video" && state.media && state.media.dataUrl) {
+          screen.innerHTML = '<video src="' + state.media.dataUrl + '" autoplay loop muted playsinline controls></video>';
           return;
         }
 
-        content.className = "screen-content blank";
-        content.innerHTML = "";
+        screen.style.background = "#ffffff";
+        screen.style.color = "#111111";
+        ensureTextLayer();
+        mainText.textContent = "";
+      }
+
+      function ensureTextLayer() {
+        if (document.querySelector("#mainText")) {
+          mainText = document.querySelector("#mainText");
+          return;
+        }
+        screen.innerHTML = '<div id="mainText"></div>';
+        mainText = document.querySelector("#mainText");
       }
     </script>
   </body>
