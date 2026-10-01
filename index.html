@@ -5,10 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Экран статуса</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23101318'/%3E%3Ccircle cx='32' cy='32' r='18' fill='%2329d36b'/%3E%3C/svg%3E">
   </head>
   <body class="screen-page">
-    <section id="screen" class="status-screen">
+    <section class="status-screen">
       <div id="rotator" class="rotator landscape">
         <div id="greeting" class="greeting">Приветствую</div>
         <div id="content" class="screen-content blank"></div>
@@ -16,8 +15,7 @@
     </section>
 
     <script>
-      const stateUrl = "https://hhh3-635eb-default-rtdb.europe-west1.firebasedatabase.app/statusScreen/current.json";
-
+      const STATE_URL = "https://hhh3-635eb-default-rtdb.europe-west1.firebasedatabase.app/statusScreen/current.json";
       const rotator = document.querySelector("#rotator");
       const greeting = document.querySelector("#greeting");
       const content = document.querySelector("#content");
@@ -29,6 +27,7 @@
         customText: "",
         media: null,
         orientation: "landscape",
+        updatedAt: 0,
       };
 
       const labels = {
@@ -37,39 +36,31 @@
         yellow: "занят, но не сильно",
       };
 
-      const colorClass = {
-        green: "green",
-        red: "red",
-        yellow: "yellow",
-      };
+      let lastStateText = "";
 
       setTimeout(() => {
         greeting.hidden = true;
-      }, 2200);
+      }, 1800);
 
-      let lastUpdatedAt = null;
+      readState();
+      setInterval(readState, 500);
 
-      pollState();
-      setInterval(pollState, 600);
-
-      async function pollState() {
+      async function readState() {
         try {
-          const response = await fetch(`${stateUrl}?t=${Date.now()}`, { cache: "no-store" });
-          if (!response.ok) throw new Error("bad_response");
+          const response = await fetch(`${STATE_URL}?t=${Date.now()}`, { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const data = await response.json();
+
           if (!data) {
-            await fetch(stateUrl, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...defaultState, updatedAt: Date.now() }),
-            });
             render(defaultState);
             return;
           }
-          if (data.updatedAt === lastUpdatedAt) return;
-          lastUpdatedAt = data.updatedAt;
+
+          const stateText = JSON.stringify(data);
+          if (stateText === lastStateText) return;
+          lastStateText = stateText;
           render({ ...defaultState, ...data });
-        } catch {
+        } catch (error) {
           content.className = "screen-content disconnected";
           content.textContent = "нет связи";
         }
@@ -79,8 +70,7 @@
         rotator.className = `rotator ${state.orientation || "landscape"}`;
 
         if (state.type === "color") {
-          const color = colorClass[state.color] || "green";
-          content.className = `screen-content color ${color}`;
+          content.className = `screen-content color ${state.color || "green"}`;
           content.innerHTML = state.showWords ? `<span>${labels[state.color] || ""}</span>` : "";
           return;
         }
@@ -91,13 +81,13 @@
           return;
         }
 
-        if (state.type === "image" && state.media?.dataUrl) {
+        if (state.type === "image" && state.media && state.media.dataUrl) {
           content.className = "screen-content media-mode";
           content.innerHTML = `<img src="${state.media.dataUrl}" alt="">`;
           return;
         }
 
-        if (state.type === "video" && state.media?.dataUrl) {
+        if (state.type === "video" && state.media && state.media.dataUrl) {
           content.className = "screen-content media-mode";
           content.innerHTML = `<video src="${state.media.dataUrl}" autoplay loop muted playsinline controls></video>`;
           return;
