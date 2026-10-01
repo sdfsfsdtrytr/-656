@@ -4,9 +4,127 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Экран статуса</title>
-    <link rel="stylesheet" href="styles.css">
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #ffffff;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .status-screen {
+        position: fixed;
+        inset: 0;
+        background: #ffffff;
+        overflow: hidden;
+      }
+
+      .rotator {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        transform-origin: center;
+      }
+
+      .rotator.portrait {
+        width: 100svh;
+        height: 100svw;
+        top: 50%;
+        left: 50%;
+        inset: auto;
+        transform: translate(-50%, -50%) rotate(90deg);
+      }
+
+      .rotator.upside {
+        transform: rotate(180deg);
+      }
+
+      .greeting {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        background: #ffffff;
+        color: #111318;
+        font-size: clamp(3rem, 12vw, 9rem);
+        font-weight: 800;
+        text-align: center;
+        padding: 8vw;
+      }
+
+      .screen-content {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        text-align: center;
+      }
+
+      .blank {
+        background: #ffffff;
+      }
+
+      .color {
+        color: #ffffff;
+        font-size: clamp(3rem, 11vw, 10rem);
+        font-weight: 900;
+        line-height: 1.05;
+        padding: 7vw;
+      }
+
+      .green {
+        background: #19c15f;
+      }
+
+      .yellow {
+        background: #ffd333;
+        color: #111318;
+      }
+
+      .red {
+        background: #ef3939;
+      }
+
+      .text-mode {
+        padding: 7vw;
+        background: #ffffff;
+        color: #111318;
+        font-size: clamp(2.6rem, 10vw, 9rem);
+        font-weight: 800;
+        line-height: 1.08;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+
+      .media-mode {
+        background: #000000;
+      }
+
+      .media-mode img,
+      .media-mode video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .disconnected {
+        background: #ffffff;
+        color: #c52020;
+        font-size: clamp(2rem, 8vw, 5rem);
+        font-weight: 800;
+      }
+    </style>
   </head>
-  <body class="screen-page">
+  <body>
     <section class="status-screen">
       <div id="rotator" class="rotator landscape">
         <div id="greeting" class="greeting">Приветствую</div>
@@ -37,33 +155,57 @@
       };
 
       let lastStateText = "";
+      let liveEvents = null;
 
       setTimeout(() => {
         greeting.hidden = true;
       }, 1800);
 
+      startLiveUpdates();
       readState();
-      setInterval(readState, 500);
+      setInterval(readState, 1000);
+
+      function startLiveUpdates() {
+        try {
+          liveEvents = new EventSource(STATE_URL);
+          liveEvents.addEventListener("put", handleFirebaseEvent);
+          liveEvents.addEventListener("patch", handleFirebaseEvent);
+          liveEvents.onerror = () => {
+            readState();
+          };
+        } catch {
+          readState();
+        }
+      }
+
+      function handleFirebaseEvent(event) {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload && payload.data) {
+            renderOnce(payload.data);
+          }
+        } catch {
+          readState();
+        }
+      }
 
       async function readState() {
         try {
           const response = await fetch(`${STATE_URL}?t=${Date.now()}`, { cache: "no-store" });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const data = await response.json();
-
-          if (!data) {
-            render(defaultState);
-            return;
-          }
-
-          const stateText = JSON.stringify(data);
-          if (stateText === lastStateText) return;
-          lastStateText = stateText;
-          render({ ...defaultState, ...data });
-        } catch (error) {
+          renderOnce(data || defaultState);
+        } catch {
           content.className = "screen-content disconnected";
           content.textContent = "нет связи";
         }
+      }
+
+      function renderOnce(rawState) {
+        const stateText = JSON.stringify(rawState);
+        if (stateText === lastStateText) return;
+        lastStateText = stateText;
+        render({ ...defaultState, ...rawState });
       }
 
       function render(state) {
