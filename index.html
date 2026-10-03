@@ -64,10 +64,14 @@
       };
 
       let last = "";
+      let latestState = {};
+      let pageBootStart = Date.now();
+      let pageBooting = true;
 
       showStartup();
       readNow();
       setInterval(readNow, 700);
+      setInterval(renderPageBoot, 250);
 
       function showStartup() {
         ensureTextLayer();
@@ -81,6 +85,11 @@
           const response = await fetch(URL + "?t=" + Date.now(), { cache: "no-store" });
           if (!response.ok) throw new Error("HTTP " + response.status);
           const data = await response.json();
+          latestState = data || {};
+          if (pageBooting) {
+            renderPageBoot();
+            return;
+          }
           const text = JSON.stringify(data || {});
           if (text === last && !isSystemState(data || {})) return;
           if (text !== last) last = text;
@@ -90,6 +99,18 @@
           screen.style.color = "#c52020";
           mainText.textContent = "НЕТ СВЯЗИ";
         }
+      }
+
+      function renderPageBoot() {
+        if (!pageBooting) return;
+        const elapsed = Date.now() - pageBootStart;
+        if (elapsed < 11000) {
+          renderStartup(elapsed, latestState);
+          return;
+        }
+        pageBooting = false;
+        last = "";
+        render(latestState || {});
       }
 
       function render(state) {
