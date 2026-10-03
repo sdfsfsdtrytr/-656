@@ -45,6 +45,74 @@
         object-fit: contain;
         background: #000000;
       }
+
+      .admin-box {
+        width: min(720px, calc(100vw - 32px));
+        display: grid;
+        gap: 16px;
+        padding: 22px;
+      }
+
+      .admin-box h1 {
+        margin: 0;
+        font-size: clamp(36px, 8vw, 84px);
+      }
+
+      .admin-box input,
+      .admin-box button {
+        min-height: 52px;
+        border: 1px solid #333333;
+        border-radius: 8px;
+        padding: 12px 14px;
+        font: inherit;
+        font-size: 20px;
+      }
+
+      .admin-box button {
+        background: #ffffff;
+        color: #111111;
+        font-weight: 800;
+      }
+
+      .admin-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .progress-wrap {
+        width: min(860px, calc(100vw - 48px));
+        display: grid;
+        gap: 18px;
+      }
+
+      .progress-row {
+        display: grid;
+        grid-template-columns: 76px 1fr;
+        align-items: center;
+        gap: 14px;
+        font-size: clamp(24px, 5vw, 54px);
+        font-weight: 900;
+      }
+
+      .progress-track {
+        height: 26px;
+        overflow: hidden;
+        border: 2px solid currentColor;
+        border-radius: 999px;
+      }
+
+      .progress-fill {
+        height: 100%;
+        width: 0%;
+        background: currentColor;
+      }
+
+      @media (max-width: 620px) {
+        .admin-grid {
+          grid-template-columns: 1fr;
+        }
+      }
     </style>
   </head>
   <body>
@@ -54,6 +122,7 @@
 
     <script>
       const URL = "https://hhh3-635eb-default-rtdb.europe-west1.firebasedatabase.app/statusScreen/current.json";
+      const ADMIN_PASSWORD = "230493";
       const screen = document.querySelector("#screen");
       let mainText = document.querySelector("#mainText");
 
@@ -67,6 +136,7 @@
       let latestState = {};
       let pageBootStart = Date.now();
       let pageBooting = true;
+      let updateFinished = false;
 
       showStartup();
       readNow();
@@ -91,7 +161,7 @@
             return;
           }
           const text = JSON.stringify(data || {});
-          if (text === last && !isSystemState(data || {})) return;
+          if (text === last && !needsContinuousRender(data || {})) return;
           if (text !== last) last = text;
           render(data || {});
         } catch (error) {
@@ -206,6 +276,26 @@
 
         if (state.systemMode === "unavailable") {
           showSystemMessage("Экран временно не работает", "#000000", "#ffffff");
+          return;
+        }
+
+        if (state.systemMode === "admin-login") {
+          renderAdminLogin(state);
+          return;
+        }
+
+        if (state.systemMode === "admin-denied") {
+          showSystemMessage("Запрос был отклонён", "#000000", "#ffffff");
+          return;
+        }
+
+        if (state.systemMode === "admin-panel") {
+          renderAdminPanel(state);
+          return;
+        }
+
+        if (state.systemMode === "update") {
+          renderUpdate(elapsed, state);
         }
       }
 
@@ -254,7 +344,141 @@
       }
 
       function isSystemState(state) {
-        return ["off", "startup", "restart", "maintenance", "unavailable"].includes(state.systemMode);
+        return ["off", "startup", "restart", "maintenance", "unavailable", "admin-login", "admin-denied", "admin-panel", "update"].includes(state.systemMode);
+      }
+
+      function needsContinuousRender(state) {
+        return ["off", "startup", "restart", "update"].includes(state.systemMode);
+      }
+
+      function renderAdminLogin(state) {
+        if (state.adminRequestStatus === "pending") {
+          showSystemMessage("Ожидаем подтверждение", "#000000", "#ffffff");
+          return;
+        }
+
+        screen.style.background = "#000000";
+        screen.style.color = "#ffffff";
+        screen.innerHTML = `
+          <form id="adminLoginForm" class="admin-box">
+            <h1>Введите пароль</h1>
+            <input id="adminPasswordInput" type="password" inputmode="numeric" autocomplete="off" aria-label="Пароль">
+            <button type="submit">Войти</button>
+          </form>
+        `;
+        const form = document.querySelector("#adminLoginForm");
+        const input = document.querySelector("#adminPasswordInput");
+        input.focus();
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          if (input.value.replace(/\D/g, "") !== ADMIN_PASSWORD) {
+            input.value = "";
+            input.placeholder = "Неверный пароль";
+            return;
+          }
+          updateFirebase({ ...state, adminRequestStatus: "pending", updatedAt: Date.now() });
+          showSystemMessage("Ожидаем подтверждение", "#000000", "#ffffff");
+        });
+      }
+
+      function renderAdminPanel(state) {
+        screen.style.background = "#000000";
+        screen.style.color = "#ffffff";
+        screen.innerHTML = `
+          <section class="admin-box">
+            <h1>Админ-панель</h1>
+            <div class="admin-grid">
+              <button data-admin="off" type="button">Выключить экран</button>
+              <button data-admin="restart" type="button">Перезагрузить</button>
+              <button data-admin="maintenance" type="button">Технические работы</button>
+              <button data-admin="unavailable" type="button">Временно не работает</button>
+              <button data-admin="update" type="button">Обновить</button>
+              <button data-admin="exit" type="button">Выйти из админ-панели</button>
+            </div>
+          </section>
+        `;
+        document.querySelectorAll("[data-admin]").forEach((button) => {
+          button.addEventListener("click", () => handleAdminAction(button.dataset.admin, state));
+        });
+      }
+
+      function handleAdminAction(action, state) {
+        const savedState = state.savedState || {};
+        if (action === "exit") {
+          updateFirebase({ ...savedState, systemMode: null, savedState: null, adminRequestStatus: null, sequenceStartedAt: null, updatedAt: Date.now() });
+          return;
+        }
+        if (action === "off") {
+          updateFirebase({ ...savedState, systemMode: "off", savedState, sequenceStartedAt: Date.now(), updatedAt: Date.now() });
+          return;
+        }
+        if (action === "restart") {
+          updateFirebase({ ...savedState, systemMode: "restart", savedState, sequenceStartedAt: Date.now(), updatedAt: Date.now() });
+          return;
+        }
+        if (action === "maintenance") {
+          updateFirebase({ ...savedState, systemMode: "maintenance", savedState, sequenceStartedAt: Date.now(), updatedAt: Date.now() });
+          return;
+        }
+        if (action === "unavailable") {
+          updateFirebase({ ...savedState, systemMode: "unavailable", savedState, sequenceStartedAt: Date.now(), updatedAt: Date.now() });
+          return;
+        }
+        if (action === "update") {
+          updateFirebase({ ...savedState, systemMode: "update", savedState, sequenceStartedAt: Date.now(), updatedAt: Date.now() });
+        }
+      }
+
+      function renderUpdate(elapsed, state) {
+        if (elapsed < 2000) {
+          showSystemMessage("Обновление экрана", "#000000", "#ffffff");
+          return;
+        }
+        if (elapsed < 62000) {
+          renderProgress("Загрузка обновления...", elapsed - 2000, 60000);
+          return;
+        }
+        if (elapsed < 65000) {
+          renderShutdown(elapsed - 62000);
+          return;
+        }
+        if (elapsed < 125000) {
+          renderProgress("Установка обновления", elapsed - 65000, 60000);
+          return;
+        }
+        if (elapsed < 127000) {
+          showSystemMessage("Обновление прошло успешно!!!", "#000000", "#19c15f");
+          return;
+        }
+        if (updateFinished) return;
+        updateFinished = true;
+        const savedState = state.savedState || {};
+        updateFirebase({ ...savedState, systemMode: null, savedState: null, sequenceStartedAt: null, updatedAt: Date.now() })
+          .finally(() => window.location.reload());
+      }
+
+      function renderProgress(title, elapsed, duration) {
+        const percent = Math.min(100, Math.max(0, Math.floor((elapsed / duration) * 100)));
+        screen.style.background = "#000000";
+        screen.style.color = "#ffffff";
+        screen.innerHTML = `
+          <section class="progress-wrap">
+            <div id="mainText">${title}</div>
+            <div class="progress-row">
+              <div>${percent}%</div>
+              <div class="progress-track"><div class="progress-fill" style="width: ${percent}%"></div></div>
+            </div>
+          </section>
+        `;
+        mainText = document.querySelector("#mainText");
+      }
+
+      function updateFirebase(nextState) {
+        return fetch(URL, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(nextState),
+        });
       }
 
       function ensureTextLayer() {
