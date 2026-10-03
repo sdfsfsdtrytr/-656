@@ -82,8 +82,8 @@
           if (!response.ok) throw new Error("HTTP " + response.status);
           const data = await response.json();
           const text = JSON.stringify(data || {});
-          if (text === last) return;
-          last = text;
+          if (text === last && !isSystemState(data || {})) return;
+          if (text !== last) last = text;
           render(data || {});
         } catch (error) {
           screen.style.background = "#ffffff";
@@ -93,6 +93,11 @@
       }
 
       function render(state) {
+        if (state.systemMode) {
+          renderSystemMode(state);
+          return;
+        }
+
         const type = state.type || "blank";
 
         if (type === "color") {
@@ -137,9 +142,98 @@
         }
 
         screen.style.background = "#ffffff";
+        if (state.blankColor) {
+          screen.style.background = state.blankColor;
+        }
         screen.style.color = "#111111";
         ensureTextLayer();
         mainText.textContent = "";
+      }
+
+      function renderSystemMode(state) {
+        const started = Number(state.sequenceStartedAt || Date.now());
+        const elapsed = Date.now() - started;
+        const savedState = state.savedState || {};
+
+        if (state.systemMode === "off") {
+          renderShutdown(elapsed);
+          return;
+        }
+
+        if (state.systemMode === "startup") {
+          renderStartup(elapsed, savedState);
+          return;
+        }
+
+        if (state.systemMode === "restart") {
+          if (elapsed < 3000) {
+            renderShutdown(elapsed);
+            return;
+          }
+          if (elapsed < 6000) {
+            showSystemMessage("", "#000000", "#ffffff");
+            return;
+          }
+          renderStartup(elapsed - 6000, savedState);
+          return;
+        }
+
+        if (state.systemMode === "maintenance") {
+          showSystemMessage("Технические работы", "#000000", "#ffffff");
+          return;
+        }
+
+        if (state.systemMode === "unavailable") {
+          showSystemMessage("Экран временно не работает", "#000000", "#ffffff");
+        }
+      }
+
+      function renderShutdown(elapsed) {
+        if (elapsed < 3000) {
+          const count = Math.max(1, 3 - Math.floor(elapsed / 1000));
+          showSystemMessage(`Выключение экрана\n${count}`, "#000000", "#ffffff");
+          return;
+        }
+        showSystemMessage("", "#000000", "#ffffff");
+      }
+
+      function renderStartup(elapsed, savedState) {
+        if (elapsed < 1500) {
+          showSystemMessage("Привет!!!", "#000000", "#ffffff");
+          return;
+        }
+        if (elapsed < 3000) {
+          showSystemMessage("Загрузка...", "#000000", "#ffffff");
+          return;
+        }
+        if (elapsed < 5000) {
+          showSystemMessage("Загрузка...", "#19c15f", "#ffffff");
+          return;
+        }
+        if (elapsed < 7000) {
+          showSystemMessage("Загрузка...", "#ffd333", "#111111");
+          return;
+        }
+        if (elapsed < 9000) {
+          showSystemMessage("Загрузка...", "#ef3939", "#ffffff");
+          return;
+        }
+        if (elapsed < 11000) {
+          showSystemMessage("Успешно", "#000000", "#19c15f");
+          return;
+        }
+        render(savedState);
+      }
+
+      function showSystemMessage(text, background, color) {
+        ensureTextLayer();
+        screen.style.background = background;
+        screen.style.color = color;
+        mainText.textContent = text;
+      }
+
+      function isSystemState(state) {
+        return ["off", "startup", "restart", "maintenance", "unavailable"].includes(state.systemMode);
       }
 
       function ensureTextLayer() {
