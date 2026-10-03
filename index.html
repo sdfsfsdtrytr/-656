@@ -98,14 +98,14 @@
       .progress-track {
         height: 26px;
         overflow: hidden;
-        border: 2px solid currentColor;
+        border: 2px solid #ffffff;
         border-radius: 999px;
       }
 
       .progress-fill {
         height: 100%;
         width: 0%;
-        background: currentColor;
+        background: #ffffff;
       }
 
       @media (max-width: 620px) {
@@ -122,7 +122,7 @@
 
     <script>
       const URL = "https://hhh3-635eb-default-rtdb.europe-west1.firebasedatabase.app/statusScreen/current.json";
-      const ADMIN_PASSWORD = "230493";
+      const ADMIN_PASSWORD = "1234";
       const screen = document.querySelector("#screen");
       let mainText = document.querySelector("#mainText");
 
@@ -353,7 +353,7 @@
 
       function renderAdminLogin(state) {
         if (state.adminRequestStatus === "pending") {
-          showSystemMessage("Ожидаем подтверждение", "#000000", "#ffffff");
+          showSystemMessage("Ожидаем ответа", "#000000", "#ffffff");
           return;
         }
 
@@ -377,7 +377,7 @@
             return;
           }
           updateFirebase({ ...state, adminRequestStatus: "pending", updatedAt: Date.now() });
-          showSystemMessage("Ожидаем подтверждение", "#000000", "#ffffff");
+          showSystemMessage("Ожидаем ответа", "#000000", "#ffffff");
         });
       }
 
@@ -439,14 +439,22 @@
           return;
         }
         if (elapsed < 65000) {
-          renderShutdown(elapsed - 62000);
+          renderProgress("Загрузка обновления...", 60000, 60000);
           return;
         }
-        if (elapsed < 125000) {
-          renderProgress("Установка обновления", elapsed - 65000, 60000);
+        if (elapsed < 68000) {
+          renderShutdown(elapsed - 65000);
           return;
         }
-        if (elapsed < 127000) {
+        if (elapsed < 71000) {
+          showSystemMessage("", "#000000", "#ffffff");
+          return;
+        }
+        if (elapsed < 131000) {
+          renderProgress("Установка обновления", elapsed - 71000, 60000);
+          return;
+        }
+        if (elapsed < 133000) {
           showSystemMessage("Обновление прошло успешно!!!", "#000000", "#19c15f");
           return;
         }
