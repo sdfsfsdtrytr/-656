@@ -481,9 +481,10 @@
             <div id="mainText">${title}</div>
             <div class="progress-row">
               <div>${percent}%</div>
-              <div class="progress-track" style="position: relative; background-color: #151515 !important; border-color: #ffffff !important;">
-                <div class="progress-fill" style="width: ${percent}%; background-color: #ffffff !important; display: block;"></div>
-              </div>
+              <svg width="100%" height="28" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
+                <rect x="0.5" y="0.5" width="99" height="9" rx="4.5" fill="#151515" stroke="#ffffff" stroke-width="1"></rect>
+                <rect x="1" y="1" width="${Math.max(0, percent - 2)}" height="8" rx="4" fill="#ffffff"></rect>
+              </svg>
             </div>
           </section>
         `;
@@ -491,6 +492,7 @@
       }
 
       function sendHeartbeat() {
+        if (latestState && latestState.systemMode === "off") return;
         fetch(URL, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
